@@ -1,3 +1,3 @@
 // @noUnusedParameters: true
 
-type Length<T> = T extends ArrayLike<infer U> ? number : never;
+type LengthCheck<T> = T extends ArrayLike<infer U> ? number : never;

@@ -1640,6 +1640,11 @@ type Uppercase<S extends string> = intrinsic;
 type Lowercase<S extends string> = intrinsic;
 
 /**
+ * Get the Length of the string literal type
+ */
+type Length<S extends string> = intrinsic;
+
+/**
  * Convert first character of string literal type to uppercase
  */
 type Capitalize<S extends string> = intrinsic;

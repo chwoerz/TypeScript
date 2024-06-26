@@ -1402,6 +1402,7 @@ const enum IntrinsicTypeKind {
     Capitalize,
     Uncapitalize,
     NoInfer,
+    Length,
 }
 
 const intrinsicTypeKinds: ReadonlyMap<string, IntrinsicTypeKind> = new Map(Object.entries({
@@ -1410,6 +1411,7 @@ const intrinsicTypeKinds: ReadonlyMap<string, IntrinsicTypeKind> = new Map(Objec
     Capitalize: IntrinsicTypeKind.Capitalize,
     Uncapitalize: IntrinsicTypeKind.Uncapitalize,
     NoInfer: IntrinsicTypeKind.NoInfer,
+    Length: IntrinsicTypeKind.Length,
 }));
 
 const SymbolLinks = class implements SymbolLinks {
@@ -18420,15 +18422,26 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
     }
 
     function getStringMappingType(symbol: Symbol, type: Type): Type {
-        return type.flags & (TypeFlags.Union | TypeFlags.Never) ? mapType(type, t => getStringMappingType(symbol, t)) :
-            type.flags & TypeFlags.StringLiteral ? getStringLiteralType(applyStringMapping(symbol, (type as StringLiteralType).value)) :
-            type.flags & TypeFlags.TemplateLiteral ? getTemplateLiteralType(...applyTemplateStringMapping(symbol, (type as TemplateLiteralType).texts, (type as TemplateLiteralType).types)) :
-            // Mapping<Mapping<T>> === Mapping<T>
-            type.flags & TypeFlags.StringMapping && symbol === type.symbol ? type :
-            type.flags & (TypeFlags.Any | TypeFlags.String | TypeFlags.StringMapping) || isGenericIndexType(type) ? getStringMappingTypeForGenericType(symbol, type) :
-            // This handles Mapping<`${number}`> and Mapping<`${bigint}`>
-            isPatternLiteralPlaceholderType(type) ? getStringMappingTypeForGenericType(symbol, getTemplateLiteralType(["", ""], [type])) :
-            type;
+        if (type.flags & (TypeFlags.Union | TypeFlags.Never)) {
+            return mapType(type, t => getStringMappingType(symbol, t));
+        }
+        else if (type.flags & TypeFlags.StringLiteral) {
+            const value = applyStringMapping(symbol, (type as StringLiteralType).value);
+            return typeof value === "number" ? getNumberLiteralType(value) : getStringLiteralType(value);
+        }
+        else if (type.flags & TypeFlags.TemplateLiteral) {
+            return getTemplateLiteralType(...applyTemplateStringMapping(symbol, (type as TemplateLiteralType).texts, (type as TemplateLiteralType).types));
+        }
+        else if (type.flags & TypeFlags.StringMapping && symbol === type.symbol) {
+            return type;
+        }
+        else if (type.flags & (TypeFlags.Any | TypeFlags.String | TypeFlags.StringMapping) || isGenericIndexType(type)) {
+            return getStringMappingTypeForGenericType(symbol, type);
+        }
+        else {
+            return isPatternLiteralPlaceholderType(type) ? getStringMappingTypeForGenericType(symbol, getTemplateLiteralType(["", ""], [type])) :
+                type;
+        }
     }
 
     function applyStringMapping(symbol: Symbol, str: string) {
@@ -18441,6 +18454,8 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                 return str.charAt(0).toUpperCase() + str.slice(1);
             case IntrinsicTypeKind.Uncapitalize:
                 return str.charAt(0).toLowerCase() + str.slice(1);
+            case IntrinsicTypeKind.Length:
+                return str.length;
         }
         return str;
     }
@@ -18455,6 +18470,8 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                 return [texts[0] === "" ? texts : [texts[0].charAt(0).toUpperCase() + texts[0].slice(1), ...texts.slice(1)], texts[0] === "" ? [getStringMappingType(symbol, types[0]), ...types.slice(1)] : types];
             case IntrinsicTypeKind.Uncapitalize:
                 return [texts[0] === "" ? texts : [texts[0].charAt(0).toLowerCase() + texts[0].slice(1), ...texts.slice(1)], texts[0] === "" ? [getStringMappingType(symbol, types[0]), ...types.slice(1)] : types];
+            case IntrinsicTypeKind.Length:
+                return [[], [neverType]];
         }
         return [texts, types];
     }
